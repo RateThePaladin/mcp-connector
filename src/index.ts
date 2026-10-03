@@ -160,6 +160,7 @@ if (isStdio) {
     }
     
     try {
+      res.setHeader("X-Accel-Buffering", "no");
       const server = createServer();
       const transport = new SSEServerTransport("/message", res);
       await server.connect(transport);
