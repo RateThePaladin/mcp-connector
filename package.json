@@ -1,6 +1,6 @@
 {
   "name": "mcp-connector",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "TypeScript MCP server that securely executes arbitrary commands on remote hosts via SSH.",
   "main": "dist/index.js",
   "repository": {
@@ -25,6 +25,7 @@
     "@modelcontextprotocol/sdk": "^1.0.1",
     "cors": "^2.8.5",
     "express": "^4.21.1",
+    "google-auth-library": "^11.1.0",
     "morgan": "^1.10.0"
   },
   "devDependencies": {
