@@ -129,15 +129,51 @@ if (isStdio) {
   // MCP SSE Endpoints (Protected by authMiddleware)
   const transports = new Map<string, SSEServerTransport>();
 
+  // Environment Health Endpoint
+  app.get("/debug/health", authMiddleware, (req, res) => {
+    if (process.env.DEBUG !== 'true') {
+      return res.status(404).json({ error: "Not Found" });
+    }
+    
+    const logPath = fs.existsSync('/config') ? '/config/access.log' : path.join(__dirname, '../access.log');
+    let logWritable = false;
+    try {
+      fs.accessSync(path.dirname(logPath), fs.constants.W_OK);
+      logWritable = true;
+    } catch {
+      logWritable = false;
+    }
+
+    res.json({
+      hasMcpApiKey: !!process.env.MCP_API_KEY,
+      hasDopplerToken: !!process.env.DOPPLER_TOKEN,
+      accessLogWritable: logWritable,
+      activeSessions: Array.from(transports.keys())
+    });
+  });
+
   app.get("/sse", authMiddleware, async (req, res) => {
+    const ip = req.ip || req.socket.remoteAddress;
+    const ua = req.get('User-Agent');
+    if (process.env.DEBUG === 'true') {
+      console.log(`[DEBUG] New connection from IP: ${ip}, User-Agent: ${ua}`);
+    }
+    
     try {
       const server = createServer();
       const transport = new SSEServerTransport("/message", res);
       await server.connect(transport);
       transports.set(transport.sessionId, transport);
+      
+      if (process.env.DEBUG === 'true') {
+        console.log(`[DEBUG] Session initialized with ID: ${transport.sessionId}`);
+      }
 
       // Clean up memory when the client disconnects
       res.on('close', () => {
+        if (process.env.DEBUG === 'true') {
+          console.log(`[DEBUG] Session disconnected: ${transport.sessionId}`);
+        }
         transports.delete(transport.sessionId);
       });
     } catch (e) {
@@ -147,6 +183,9 @@ if (isStdio) {
   });
 
   app.post("/message", authMiddleware, express.json(), async (req, res) => {
+    if (process.env.DEBUG === 'true') {
+      console.log(`[DEBUG] JSON-RPC Message Received:`, JSON.stringify(req.body, null, 2));
+    }
     const sessionId = req.query.sessionId as string;
     const transport = transports.get(sessionId);
     if (!transport) {

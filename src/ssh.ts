@@ -17,6 +17,11 @@ export const executeOnHost = (params: ExecuteHostParams): Promise<string> => {
 
     const scriptPath = path.resolve(__dirname, '../scripts/ssh-host.sh');
 
+    if (process.env.DEBUG === 'true') {
+      console.log(`[DEBUG] Executing on host ${host}. Spawning wrapper: ${scriptPath} [${host}]`);
+      console.log(`[DEBUG] Stdin payload: ${command}`);
+    }
+
     // Spawn the wrapper script. It takes: host
     const sshProcess = spawn(scriptPath, [host], {
       // Run completely detached from any shells
@@ -39,6 +44,11 @@ export const executeOnHost = (params: ExecuteHostParams): Promise<string> => {
     });
 
     sshProcess.on('close', (code) => {
+      if (process.env.DEBUG === 'true') {
+        console.log(`[DEBUG] SSH wrapper exited with code: ${code}`);
+        console.log(`[DEBUG] Stdout buffer: ${stdoutData.trim()}`);
+        console.log(`[DEBUG] Stderr buffer: ${stderrData.trim()}`);
+      }
       if (code !== 0) {
         // Return a clean error message that encapsulates the command failure
         return reject(new Error(`Command failed with exit code ${code}\nStderr: ${stderrData.trim()}`));
