@@ -5,3 +5,4 @@ dist/
 coverage/
 *.key.tmpl
 .agents/
+docs/proxy_architecture.md
