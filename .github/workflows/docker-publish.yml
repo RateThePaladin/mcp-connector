@@ -1,9 +1,9 @@
 name: Create and publish Docker images
 
 on:
-  release:
-    types:
-      - published
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 env:
@@ -11,7 +11,27 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  check-release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check version and release
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="v$(jq -r .version package.json)"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          if ! gh release view "$VERSION" > /dev/null 2>&1; then
+            gh release create "$VERSION" --title "Release $VERSION" --generate-notes
+          fi
+
   prepare:
+    needs: check-release
     runs-on: ubuntu-24.04
     outputs:
       image_name: ${{ steps.image-name.outputs.image_name }}
@@ -29,7 +49,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ steps.image-name.outputs.image_name }}
           tags: |
             type=raw,value=latest,enable=true
-            type=ref,event=tag
+            type=raw,value=${{ needs.check-release.outputs.version }}
             type=ref,event=branch
 
   build:
