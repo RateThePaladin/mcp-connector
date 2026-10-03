@@ -10,12 +10,12 @@ if ! getent group "$PGID" >/dev/null; then
 fi
 
 if ! getent passwd abc >/dev/null; then
-    useradd -u "$PUID" -g "$PGID" -d /config -s /bin/bash abc
+    useradd -o -u "$PUID" -g "$PGID" -d /config -s /bin/bash abc
 fi
 
 # Set permissions
 mkdir -p /config
-chown -R abc:abc /config /app
+chown -R abc:"$PGID" /config /app
 
 # Setup KNOWN_HOSTS
 gosu abc bash -c '
