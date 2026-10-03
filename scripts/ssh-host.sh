@@ -59,7 +59,7 @@ if [ $EXIT_CODE -ne 0 ]; then
     echo "ERROR: Host Key Verification Failed." >&2
     echo "The host's fingerprint is missing or has changed." >&2
     echo "INSTRUCTIONS: Please tell the user they must add the host's public key fingerprint to the 'KNOWN_HOSTS' secret in Doppler." >&2
-  elif echo "$ERR_OUTPUT" | grep -qi "Permission denied"; then
+  elif echo "$ERR_OUTPUT" | grep -qi "Permission denied (publickey"; then
     echo "ERROR: Permission Denied." >&2
     echo "The private key was rejected by the server." >&2
     echo "INSTRUCTIONS: Please tell the user to verify the <HOST>_KEY and <HOST>_USER values in Doppler." >&2
