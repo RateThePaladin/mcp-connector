@@ -1,6 +1,6 @@
 {
   "name": "mcp-connector",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "TypeScript MCP server that securely executes arbitrary commands on remote hosts via SSH.",
   "main": "dist/index.js",
   "repository": {

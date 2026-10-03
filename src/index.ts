@@ -192,7 +192,7 @@ if (isStdio) {
       res.status(404).json({ error: "Session not found" });
       return;
     }
-    await transport.handlePostMessage(req, res);
+    await transport.handlePostMessage(req, res, req.body);
   });
 
   app.listen(PORT, () => {

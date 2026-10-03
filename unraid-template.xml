@@ -16,4 +16,5 @@
   <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Container Group ID" Type="Variable" Display="advanced" Required="true" Mask="false"/>
   <Config Name="Doppler Token" Target="DOPPLER_TOKEN" Default="" Mode="" Description="Doppler Service Token to fetch KNOWN_HOSTS_B64 and dynamic SSH keys." Type="Variable" Display="always" Required="true" Mask="true"/>
   <Config Name="MCP API Key" Target="MCP_API_KEY" Default="" Mode="" Description="A secure, static Bearer token used by MCP clients to authenticate. You can generate one via terminal: openssl rand -hex 32" Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="Debug Mode" Target="DEBUG" Default="false" Mode="" Description="Set to 'true' to enable verbose observability logging for connections and SSH executions." Type="Variable" Display="advanced" Required="false" Mask="false"/>
 </Container>
