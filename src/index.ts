@@ -175,7 +175,8 @@ if (isStdio) {
         if (process.env.DEBUG === 'true') {
           console.log(`[DEBUG] Session disconnected: ${transport.sessionId}`);
         }
-        transports.delete(transport.sessionId);
+        // Delay deletion slightly to avoid race conditions with incoming POSTs if connection flickers
+        setTimeout(() => transports.delete(transport.sessionId), 5000);
       });
     } catch (e) {
       console.error('SSE Connection Error:', e);
@@ -184,12 +185,15 @@ if (isStdio) {
   });
 
   app.post("/message", authMiddleware, express.json(), async (req, res) => {
-    if (process.env.DEBUG === 'true') {
-      console.log(`[DEBUG] JSON-RPC Message Received:`, JSON.stringify(req.body, null, 2));
-    }
     const sessionId = req.query.sessionId as string;
+    if (process.env.DEBUG === 'true') {
+      console.log(`[DEBUG] POST /message received. Query sessionId: '${sessionId}'`);
+      console.log(`[DEBUG] Active sessions:`, Array.from(transports.keys()));
+      console.log(`[DEBUG] Request URL:`, req.originalUrl);
+    }
     const transport = transports.get(sessionId);
     if (!transport) {
+      console.log(`[ERROR] Session not found for ID: '${sessionId}'`);
       res.status(404).json({ error: "Session not found" });
       return;
     }
