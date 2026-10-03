@@ -1,4 +1,4 @@
-name: Create and publish Docker images
+name: CI/CD Pipeline
 
 on:
   push:
@@ -11,7 +11,31 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  lint:
+    needs: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+      - run: npm ci
+      - run: npm run lint --if-present
+      - run: npm run test
+
   check-release:
+    needs: lint
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.check.outputs.version }}

@@ -202,7 +202,13 @@ if (isStdio) {
   // Graceful Shutdown
   const shutdown = () => {
     console.error('Shutting down server...');
-    for (const t of transports.values()) { try { t.close(); } catch (e) { } }
+    for (const t of transports.values()) { 
+      try { 
+        t.close(); 
+      } catch { 
+        // Ignore errors during graceful shutdown
+      } 
+    }
     process.exit(0);
   };
 
