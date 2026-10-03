@@ -1,8 +1,5 @@
 import { authMiddleware } from '../src/auth';
 import { Request, Response, NextFunction } from 'express';
-import { OAuth2Client } from 'google-auth-library';
-
-jest.mock('google-auth-library');
 
 describe('Auth Middleware', () => {
   let mockReq: Partial<Request>;
@@ -18,8 +15,7 @@ describe('Auth Middleware', () => {
       json: jest.fn(),
     };
     nextFunction = jest.fn();
-    process.env.GCP_CLIENT_ID = 'test-client-id';
-    process.env.ALLOWED_EMAILS = 'allowed@example.com, another@example.com';
+    process.env.MCP_API_KEY = 'test-secret-key';
   });
 
   it('should reject requests without authorization header', async () => {
@@ -27,31 +23,30 @@ describe('Auth Middleware', () => {
     expect(mockRes.status).toHaveBeenCalledWith(401);
   });
 
-  it('should reject invalid emails', async () => {
-    mockReq.headers!.authorization = 'Bearer test-token';
+  it('should reject invalid api keys', async () => {
+    mockReq.headers!.authorization = 'Bearer wrong-key';
     
-    const mockVerifyIdToken = jest.fn().mockResolvedValue({
-      getPayload: () => ({ email: 'hacker@example.com' })
-    });
-    OAuth2Client.prototype.verifyIdToken = mockVerifyIdToken;
-
     await authMiddleware(mockReq as Request, mockRes as Response, nextFunction);
     
-    expect(mockRes.status).toHaveBeenCalledWith(403);
-    expect(mockRes.json).toHaveBeenCalledWith({ error: 'Forbidden: Email not allowed' });
+    expect(mockRes.status).toHaveBeenCalledWith(401);
+    expect(mockRes.json).toHaveBeenCalledWith({ error: 'Invalid API Key' });
   });
 
-  it('should accept allowed emails', async () => {
-    mockReq.headers!.authorization = 'Bearer test-token';
+  it('should accept the correct api key', async () => {
+    mockReq.headers!.authorization = 'Bearer test-secret-key';
     
-    const mockVerifyIdToken = jest.fn().mockResolvedValue({
-      getPayload: () => ({ email: 'allowed@example.com' })
-    });
-    OAuth2Client.prototype.verifyIdToken = mockVerifyIdToken;
-
     await authMiddleware(mockReq as Request, mockRes as Response, nextFunction);
     
     expect(nextFunction).toHaveBeenCalled();
-    expect((mockReq as any).user.email).toBe('allowed@example.com');
+  });
+  
+  it('should error 500 if MCP_API_KEY is not set', async () => {
+    delete process.env.MCP_API_KEY;
+    mockReq.headers!.authorization = 'Bearer test-secret-key';
+    
+    await authMiddleware(mockReq as Request, mockRes as Response, nextFunction);
+    
+    expect(mockRes.status).toHaveBeenCalledWith(500);
+    expect(mockRes.json).toHaveBeenCalledWith({ error: 'Server authentication is not configured correctly' });
   });
 });

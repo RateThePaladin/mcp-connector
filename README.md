@@ -4,7 +4,14 @@ A production-grade TypeScript MCP server that securely executes arbitrary comman
 
 ## Security Architecture
 This project is designed to operate securely on a local network (LAN) behind an Nginx TLS reverse proxy.
-Authentication is handled via Google OIDC tokens, and strictly verified against an `ALLOWED_EMAILS` allowlist.
+Authentication is handled via a static API key passed as a Bearer token (`MCP_API_KEY`).
+
+### Generating an API Key
+To generate a secure API key on your terminal (Mac/Linux), run:
+```bash
+openssl rand -hex 32
+```
+Save this key as the `MCP_API_KEY` secret in your Doppler dashboard. Your MCP clients must then pass this exact string in their `Authorization: Bearer <key>` headers.
 
 SSH private keys are managed dynamically via Doppler. Instead of loading keys into Node.js, this app blindly executes a wrapper script (`scripts/ssh-host.sh`). The wrapper starts an isolated `ssh-agent`, securely fetches the required key from Doppler into RAM, and automatically cleans up upon exit using bash traps.
 
@@ -42,7 +49,7 @@ Use the provided `unraid-template.xml` to deploy via Docker to your Unraid host.
 Ensure the container runs behind an Nginx reverse proxy providing HTTPS to encrypt the SSE MCP traffic.
 
 ## AI Use Disclaimer
-> **Notice**: This project, its architecture, and its source code were generated with the assistance of an AI coding agent. While the architecture is designed with security best practices in mind (such as file-less SSH key injection and strict OIDC validation), you should independently review and verify all security-critical components before using this in a production environment.
+> **Notice**: This project, its architecture, and its source code were generated with the assistance of an AI coding agent. While the architecture is designed with security best practices in mind (such as file-less SSH key injection and strict API key validation), you should independently review and verify all security-critical components before using this in a production environment.
 
 ## License
 
