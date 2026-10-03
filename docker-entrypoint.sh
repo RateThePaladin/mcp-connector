@@ -28,4 +28,4 @@ gosu abc bash -c '
 '
 
 # Execute the main process as the unprivileged user
-exec gosu abc node dist/index.js
+exec gosu abc doppler run -- node dist/index.js
