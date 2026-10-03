@@ -5,12 +5,12 @@ set -e
 PUID=${PUID:-99}
 PGID=${PGID:-100}
 
-if ! getent group abc >/dev/null; then
+if ! getent group "$PGID" >/dev/null; then
     groupadd -g "$PGID" abc
 fi
 
 if ! getent passwd abc >/dev/null; then
-    useradd -u "$PUID" -g abc -d /config -s /bin/bash abc
+    useradd -u "$PUID" -g "$PGID" -d /config -s /bin/bash abc
 fi
 
 # Set permissions
