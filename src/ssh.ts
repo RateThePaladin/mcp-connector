@@ -17,11 +17,15 @@ export const executeOnHost = (params: ExecuteHostParams): Promise<string> => {
 
     const scriptPath = path.resolve(__dirname, '../scripts/ssh-host.sh');
 
-    // Spawn the wrapper script. It takes: host, command
-    const sshProcess = spawn(scriptPath, [host, command], {
+    // Spawn the wrapper script. It takes: host
+    const sshProcess = spawn(scriptPath, [host], {
       // Run completely detached from any shells
       shell: false
     });
+
+    // Write the command to stdin to keep it out of process arguments
+    sshProcess.stdin.write(command);
+    sshProcess.stdin.end();
 
     let stdoutData = '';
     let stderrData = '';

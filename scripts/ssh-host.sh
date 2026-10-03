@@ -2,7 +2,8 @@
 set -e
 
 HOST_IDENTIFIER="$1"
-COMMAND="$2"
+# Read command from stdin to hide it from process lists (ps aux)
+COMMAND=$(cat)
 
 if [[ ! "$HOST_IDENTIFIER" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   echo "Invalid host identifier" >&2
@@ -28,8 +29,8 @@ fi
 eval $(ssh-agent -s) > /dev/null
 trap 'kill $SSH_AGENT_PID >/dev/null 2>&1 || true; rm -f /tmp/ssh_err_$$' EXIT
 
-# Securely load the key into ssh-agent from Doppler
-if ! doppler secrets get "${HOST_PREFIX}_KEY" --plain 2>/dev/null | ssh-add - > /dev/null 2>&1; then
+# Securely load the key into ssh-agent from Doppler with a 60-second lifetime
+if ! doppler secrets get "${HOST_PREFIX}_KEY" --plain 2>/dev/null | ssh-add -t 60 - > /dev/null 2>&1; then
   echo "ERROR: Missing or Invalid SSH Key" >&2
   echo "Could not load the private key for the requested host from Doppler." >&2
   echo "INSTRUCTIONS: Please tell the user to verify the raw private key exists in Doppler under the format <HOST>_KEY." >&2

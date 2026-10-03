@@ -122,16 +122,19 @@ if (isStdio) {
   });
 
   // MCP SSE Endpoints (Protected by authMiddleware)
-  let transport: SSEServerTransport | null = null;
+  const transports = new Map<string, SSEServerTransport>();
 
   app.get("/sse", authMiddleware, async (req, res) => {
-    transport = new SSEServerTransport("/message", res);
+    const transport = new SSEServerTransport("/message", res);
     await server.connect(transport);
+    transports.set(transport.sessionId, transport);
   });
 
   app.post("/message", authMiddleware, express.json(), async (req, res) => {
+    const sessionId = req.query.sessionId as string;
+    const transport = transports.get(sessionId);
     if (!transport) {
-      res.status(503).json({ error: "SSE Transport not initialized" });
+      res.status(404).json({ error: "Session not found" });
       return;
     }
     await transport.handlePostMessage(req, res);

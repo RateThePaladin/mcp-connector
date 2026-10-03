@@ -21,7 +21,21 @@ For example, to connect to the identifier `node`, define:
 - `NODE_HOST`: The IP Address or Hostname (e.g., `192.168.1.50`)
 - `NODE_KEY`: The raw RSA/ED25519 private key contents
 
-To prevent Man-in-the-Middle (MITM) attacks, you must also define a `KNOWN_HOSTS` secret containing the public key fingerprints of all your target servers.
+To prevent Man-in-the-Middle (MITM) attacks, you must also define a `KNOWN_HOSTS_B64` secret containing the base64-encoded public key fingerprints of all your target servers.
+
+### Generating KNOWN_HOSTS_B64
+Here is how to generate this safely on your local machine (Linux/Mac):
+
+1. **Scan your target hosts** and save their fingerprints to a file:
+   ```bash
+   ssh-keyscan -H 192.168.1.50 > my_known_hosts
+   ssh-keyscan -H 192.168.1.51 >> my_known_hosts # use >> to append additional hosts
+   ```
+2. **Convert the file to a single Base64 string**:
+   ```bash
+   cat my_known_hosts | base64 | tr -d '\n'
+   ```
+3. Copy the exact output string and paste it into your Doppler dashboard as the `KNOWN_HOSTS_B64` secret.
 
 ## Deployment
 Use the provided `unraid-template.xml` to deploy via Docker to your Unraid host.
