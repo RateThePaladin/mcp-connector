@@ -14,6 +14,7 @@ describe('SSH Execution Module', () => {
     const mockProcess = new EventEmitter() as any;
     mockProcess.stdout = new EventEmitter();
     mockProcess.stderr = new EventEmitter();
+    mockProcess.stdin = { write: jest.fn(), end: jest.fn() };
     
     (spawn as jest.Mock).mockReturnValue(mockProcess);
 
@@ -27,8 +28,9 @@ describe('SSH Execution Module', () => {
 
     expect(spawn).toHaveBeenCalledWith(
       expect.stringContaining('ssh-host.sh'),
-      ['valid-host', 'echo "test"'],
+      ['valid-host'],
       { shell: false }
     );
+    expect(mockProcess.stdin.write).toHaveBeenCalledWith('echo "test"');
   });
 });

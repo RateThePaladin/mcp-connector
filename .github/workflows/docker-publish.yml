@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.check.outputs.version }}
+      new_release: ${{ steps.check.outputs.new_release }}
     permissions:
       contents: write
     steps:
@@ -28,10 +29,14 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           if ! gh release view "$VERSION" > /dev/null 2>&1; then
             gh release create "$VERSION" --title "Release $VERSION" --generate-notes
+            echo "new_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "new_release=false" >> $GITHUB_OUTPUT
           fi
 
   prepare:
     needs: check-release
+    if: needs.check-release.outputs.new_release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     outputs:
       image_name: ${{ steps.image-name.outputs.image_name }}
