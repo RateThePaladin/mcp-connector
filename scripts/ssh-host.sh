@@ -40,11 +40,11 @@ fi
 # Execute command using the resolved user and host
 # We disable set -e temporarily to manually handle and parse SSH failures
 set +e
-ssh -o StrictHostKeyChecking=yes \
+printf "%s\n" "$COMMAND" | ssh -o StrictHostKeyChecking=yes \
     -o UserKnownHostsFile=~/.ssh/known_hosts \
     -o BatchMode=yes \
     -o ConnectTimeout=10 \
-    "${TARGET_USER}@${TARGET_HOST}" "$COMMAND" 2> /tmp/ssh_err_$$
+    "${TARGET_USER}@${TARGET_HOST}" 2> /tmp/ssh_err_$$
 EXIT_CODE=$?
 set -e
 

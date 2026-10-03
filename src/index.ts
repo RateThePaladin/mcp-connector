@@ -128,6 +128,11 @@ if (isStdio) {
     const transport = new SSEServerTransport("/message", res);
     await server.connect(transport);
     transports.set(transport.sessionId, transport);
+
+    // Clean up memory when the client disconnects
+    res.on('close', () => {
+      transports.delete(transport.sessionId);
+    });
   });
 
   app.post("/message", authMiddleware, express.json(), async (req, res) => {
