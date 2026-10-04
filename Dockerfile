@@ -29,6 +29,7 @@ RUN npm ci --omit=dev
 # Copy compiled files and scripts
 COPY --from=builder /app/dist ./dist
 COPY scripts/ ./scripts/
+COPY public/ ./public/
 COPY docker-entrypoint.sh ./
 
 RUN chmod +x docker-entrypoint.sh scripts/ssh-host.sh

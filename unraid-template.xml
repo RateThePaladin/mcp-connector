@@ -6,7 +6,8 @@
   <Network>bridge</Network>
   <Shell>bash</Shell>
   <Privileged>false</Privileged>
-  <Overview>TypeScript MCP server that securely executes arbitrary commands on remote hosts via SSH.</Overview>
+  <WebUI>http://[IP]:[PORT:3000]/login</WebUI>
+  <Overview>TypeScript MCP server that securely executes arbitrary commands on remote hosts via SSH. Exposes an authentication portal for generating API keys.</Overview>
   <Category>Tools:Utilities</Category>
 
   <Config Name="Appdata Config" Target="/config" Default="/mnt/user/appdata/mcp-connector" Mode="rw" Type="Path" Display="always" Required="true" Mask="false"/>
@@ -14,7 +15,6 @@
 
   <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="Container User ID" Type="Variable" Display="advanced" Required="true" Mask="false"/>
   <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Container Group ID" Type="Variable" Display="advanced" Required="true" Mask="false"/>
-  <Config Name="Doppler Token" Target="DOPPLER_TOKEN" Default="" Mode="" Description="Doppler Service Token to fetch KNOWN_HOSTS_B64 and dynamic SSH keys." Type="Variable" Display="always" Required="true" Mask="true"/>
-  <Config Name="MCP API Key" Target="MCP_API_KEY" Default="" Mode="" Description="A secure, static Bearer token used by MCP clients to authenticate. You can generate one via terminal: openssl rand -hex 32" Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="Doppler Token" Target="DOPPLER_TOKEN" Default="" Mode="" Description="Doppler Service Token to fetch JWT_SECRET, GOOGLE_CLIENT_ID, and proxy configs." Type="Variable" Display="always" Required="true" Mask="true"/>
   <Config Name="Debug Mode" Target="DEBUG" Default="false" Mode="" Description="Set to 'true' to enable verbose observability logging for connections and SSH executions." Type="Variable" Display="advanced" Required="false" Mask="false"/>
 </Container>
