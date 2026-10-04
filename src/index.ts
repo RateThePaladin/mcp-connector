@@ -12,6 +12,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { authMiddleware } from './auth';
 import { executeOnHost } from './ssh';
+import { executeProxyRequest } from './proxy';
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 
@@ -55,6 +56,21 @@ const createServer = () => {
             required: ["host", "command"],
           },
         },
+        {
+          name: "application_api_request",
+          description: "Securely executes REST API requests against internal applications without exposing API keys. Requires application name, host, HTTP method, and endpoint.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              application: { type: "string", description: "Target app (e.g., sonarr, nginx)" },
+              host: { type: "string", description: "Target host (e.g., node, synology)" },
+              method: { type: "string", description: "HTTP method (GET, POST, PUT, DELETE)" },
+              endpoint: { type: "string", description: "API path (e.g., /api/v3/system/status)" },
+              body: { type: "object", description: "Optional JSON payload" }
+            },
+            required: ["application", "host", "method", "endpoint"]
+          }
+        }
       ],
     };
   });
@@ -81,6 +97,34 @@ const createServer = () => {
             {
               type: "text",
               text: `Error executing command: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        };
+      }
+    } else if (request.params.name === "application_api_request") {
+      const application = String(request.params.arguments?.application);
+      const host = String(request.params.arguments?.host);
+      const method = String(request.params.arguments?.method);
+      const endpoint = String(request.params.arguments?.endpoint);
+      const body = request.params.arguments?.body;
+
+      try {
+        const output = await executeProxyRequest({ application, host, method, endpoint, body });
+        return {
+          content: [
+            {
+              type: "text",
+              text: typeof output === 'string' ? output : JSON.stringify(output, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: `Error executing API request: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
         };

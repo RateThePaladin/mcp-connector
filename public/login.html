@@ -1,54 +1,256 @@
 <!DOCTYPE html>
-<html data-theme="dark">
-  <head>
-    <title>MCP Connector Login</title>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <style>
-      body { background-color: #121212; color: #ffffff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-      .container { background: #1e1e1e; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-align: center; }
-      code { background: #2d2d2d; padding: 1rem; border-radius: 4px; display: block; margin-top: 1rem; word-break: break-all; }
-      #error-msg { color: #ff5252; margin-top: 1rem; }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h2>Authenticate IDE</h2>
-      
-      <!-- Google Auth Button Mount Point -->
-      <div id="g_id_onload"
-           data-client_id="__GOOGLE_CLIENT_ID__"
-           data-callback="handleCredentialResponse">
-      </div>
-      <div class="g_id_signin" data-type="standard" data-theme="filled_black"></div>
-      
-      <div id="error-msg"></div>
-
-      <!-- Token Display Area -->
-      <div id="token-container" style="display:none;">
-         <h3>Your API Key</h3>
-         <p>Add this to your <code>mcp_config.json</code> under the Authorization header:</p>
-         <code id="api-key-output"></code>
-      </div>
-    </div>
-
-    <script>
-      function handleCredentialResponse(response) {
-        fetch('/api/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ credential: response.credential })
-        })
-        .then(res => res.json().then(data => ({ status: res.status, body: data })))
-        .then(({ status, body }) => {
-          if (status === 200) {
-            document.getElementById('token-container').style.display = 'block';
-            document.getElementById('api-key-output').innerText = `Authorization: Bearer ${body.token}`;
-            document.getElementById('error-msg').innerText = '';
-          } else {
-            document.getElementById('error-msg').innerText = body.error || 'Authentication failed';
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCP Connector &mdash; Sign In</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'SF Pro Text', 'sans-serif'],
+            mono: ['JetBrains Mono', 'SF Mono', 'Menlo', 'monospace'],
+          },
+          colors: {
+            canvas: '#000000',
+            appleCard: '#161618',
+            appleCardBorder: 'rgba(255, 255, 255, 0.08)',
+            appleCardHighlight: 'rgba(255, 255, 255, 0.14)',
+            appleSubtext: '#86868b',
           }
-        });
+        }
       }
-    </script>
-  </body>
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #000000;
+      color: #f5f5f7;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .apple-glass {
+      background: rgba(22, 22, 24, 0.78);
+      backdrop-filter: blur(30px);
+      -webkit-backdrop-filter: blur(30px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 
+        0 0 0 1px rgba(0, 0, 0, 0.6),
+        0 20px 50px -10px rgba(0, 0, 0, 0.9),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    }
+
+    .subtle-spotlight {
+      background: radial-gradient(600px circle at center, rgba(255, 255, 255, 0.035) 0%, transparent 70%);
+    }
+
+    .step-view {
+      transition: opacity 320ms cubic-bezier(0.16, 1, 0.3, 1), transform 320ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .step-hidden {
+      opacity: 0;
+      transform: scale(0.97) translateY(8px);
+      pointer-events: none;
+      display: none;
+    }
+
+    .step-visible {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+      display: block;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6 relative overflow-hidden select-none">
+
+  <!-- Ambient Light Field -->
+  <div class="fixed inset-0 pointer-events-none subtle-spotlight"></div>
+  <div class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] bg-blue-500/[0.02] rounded-full blur-[140px] pointer-events-none"></div>
+
+  <!-- Focused Minimalist Card -->
+  <main class="w-full max-w-[420px] relative z-10">
+    <div class="apple-glass rounded-3xl p-8 sm:p-10 transition-all duration-500">
+      
+      <!-- ================= STEP 1: AUTHENTICATION ================= -->
+      <div id="auth-state" class="step-view step-visible text-center">
+        <!-- Minimal Symbol Accent -->
+        <div class="mx-auto mb-7 flex items-center justify-center w-14 h-14 rounded-2xl bg-white/[0.05] border border-white/[0.08] shadow-inner">
+          <span class="material-symbols-outlined text-[24px] text-white/90" style="font-variation-settings: 'wght' 300;">sync_alt</span>
+        </div>
+
+        <!-- Typography Driven Header -->
+        <h1 class="text-[22px] font-semibold text-white tracking-tight mb-2">
+          Sign In to MCP Connector
+        </h1>
+        <p class="text-[13px] text-appleSubtext leading-relaxed mb-8 max-w-[270px] mx-auto">
+          Authenticate to generate and manage your infrastructure connector credentials.
+        </p>
+
+        <!-- Google Sign-In Action -->
+        <div class="w-full flex flex-col items-center justify-center">
+          <div id="g_id_onload"
+               data-client_id="__GOOGLE_CLIENT_ID__"
+               data-callback="handleCredentialResponse"
+               data-auto_prompt="false">
+          </div>
+          <div class="g_id_signin" 
+               data-type="standard" 
+               data-theme="filled_black" 
+               data-size="large" 
+               data-text="signin_with" 
+               data-shape="rectangular" 
+               data-logo_alignment="left"
+               data-width="320">
+          </div>
+          <div id="error-msg" class="text-red-400 text-sm mt-4 hidden"></div>
+        </div>
+      </div>
+
+      <!-- ================= STEP 2: GENERATED API KEY DISPLAY ================= -->
+      <div id="key-state" class="step-view step-hidden text-left">
+        <!-- Status Indicator -->
+        <div class="flex items-center gap-2.5 mb-5">
+          <div class="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center">
+            <span class="material-symbols-outlined text-[15px] text-emerald-400" style="font-variation-settings: 'wght' 500;">check</span>
+          </div>
+          <div>
+            <h2 class="text-[16px] font-semibold text-white tracking-tight">
+              API Key Generated
+            </h2>
+          </div>
+        </div>
+
+        <p class="text-[13px] text-appleSubtext leading-relaxed mb-5">
+          Your client credential is ready. Use this token to authenticate your local MCP services.
+        </p>
+
+        <!-- Monospaced Key Container with Inline Tactile Copy Button -->
+        <div class="relative bg-[#0d0d0e] rounded-xl border border-white/[0.08] p-3 pl-3.5 mb-5 flex items-center justify-between gap-3 shadow-inner">
+          <div class="overflow-x-auto no-scrollbar py-0.5">
+            <code id="api-key-text" class="font-mono text-[13px] text-neutral-200 tracking-tight select-all whitespace-nowrap">mcp_live_9f82a17e0b5c48d29b31f7c89a</code>
+          </div>
+          
+          <button 
+            id="copy-btn" 
+            type="button" 
+            onclick="copyKey()"
+            class="shrink-0 h-8 px-3 rounded-lg bg-[#242426] hover:bg-[#2c2c2e] active:scale-[0.96] border border-white/[0.08] hover:border-white/[0.16] transition-all duration-150 flex items-center gap-1.5 text-[12px] font-medium text-white cursor-pointer"
+          >
+            <span id="copy-icon" class="material-symbols-outlined text-[14px] text-neutral-300">content_copy</span>
+            <span id="copy-text">Copy</span>
+          </button>
+        </div>
+
+        <!-- Security Warning -->
+        <div class="flex items-start gap-2.5 py-3 px-3.5 rounded-xl bg-amber-500/[0.04] border border-amber-500/15 mb-6">
+          <span class="material-symbols-outlined text-[16px] text-amber-400/90 shrink-0 mt-0.5" style="font-variation-settings: 'wght' 400;">lock_clock</span>
+          <p class="text-[12px] text-neutral-400 leading-normal">
+            <strong class="text-amber-300/90 font-medium">Important:</strong> This key will never be shown again once you leave this page. Store it securely in your secret manager.
+          </p>
+        </div>
+
+        <!-- Minimalist Secondary Action -->
+        <div class="pt-2 border-t border-white/[0.06] flex items-center justify-between text-[12px]">
+          <span class="text-neutral-500 font-mono text-[11px]">Scope: full_access</span>
+          <button 
+            type="button" 
+            onclick="resetAuth()" 
+            class="text-appleSubtext hover:text-white transition-colors cursor-pointer"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    let RAW_SECRET_KEY = "";
+    
+    window.handleCredentialResponse = function(response) {
+      const errorMsg = document.getElementById('error-msg');
+      errorMsg.classList.add('hidden');
+
+      fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: response.credential })
+      })
+      .then(res => res.json().then(data => ({ status: res.status, body: data })))
+      .then(({ status, body }) => {
+        if (status === 200) {
+          RAW_SECRET_KEY = `Authorization: Bearer ${body.token}`;
+          
+          document.getElementById('api-key-text').innerText = RAW_SECRET_KEY;
+          
+          const authState = document.getElementById('auth-state');
+          const keyState = document.getElementById('key-state');
+
+          authState.classList.remove('step-visible');
+          authState.classList.add('step-hidden');
+
+          keyState.classList.remove('step-hidden');
+          keyState.classList.add('step-visible');
+        } else {
+          errorMsg.innerText = body.error || 'Authentication failed. Please try again.';
+          errorMsg.classList.remove('hidden');
+        }
+      })
+      .catch(err => {
+        errorMsg.innerText = 'Network error occurred.';
+        errorMsg.classList.remove('hidden');
+      });
+    }
+
+    function copyKey() {
+      const copyBtn = document.getElementById('copy-btn');
+      const copyText = document.getElementById('copy-text');
+      const copyIcon = document.getElementById('copy-icon');
+
+      navigator.clipboard.writeText(RAW_SECRET_KEY).catch(() => {
+        const dummy = document.createElement("textarea");
+        dummy.value = RAW_SECRET_KEY;
+        document.body.appendChild(dummy);
+        dummy.select();
+        document.execCommand("copy");
+        document.body.removeChild(dummy);
+      });
+
+      copyText.textContent = 'Copied';
+      copyIcon.textContent = 'check';
+      copyBtn.classList.add('bg-emerald-500/20', 'border-emerald-500/30', 'text-emerald-300');
+
+      setTimeout(() => {
+        copyText.textContent = 'Copy';
+        copyIcon.textContent = 'content_copy';
+        copyBtn.classList.remove('bg-emerald-500/20', 'border-emerald-500/30', 'text-emerald-300');
+      }, 2000);
+    }
+
+    function resetAuth() {
+      const authState = document.getElementById('auth-state');
+      const keyState = document.getElementById('key-state');
+
+      keyState.classList.remove('step-visible');
+      keyState.classList.add('step-hidden');
+
+      authState.classList.remove('step-hidden');
+      authState.classList.add('step-visible');
+    }
+  </script>
+</body>
 </html>
