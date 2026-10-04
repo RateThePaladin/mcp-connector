@@ -45,8 +45,21 @@ Here is how to generate this safely on your local machine (Linux/Mac):
 3. Copy the exact output string and paste it into your Doppler dashboard as the `KNOWN_HOSTS_B64` secret.
 
 ## Deployment
-Use the provided `unraid-template.xml` to deploy via Docker to your Unraid host.
+
 Ensure the container runs behind an Nginx reverse proxy providing HTTPS to encrypt the SSE MCP traffic.
+
+### Unraid
+Use the provided `unraid-template.xml` to deploy via Docker to your Unraid host. The template configures the necessary volume mounts and prompts for the `DOPPLER_TOKEN`.
+
+### Linux (Ubuntu)
+For a standard Linux host, use Docker Compose. First, copy the example environment file:
+```bash
+cp .env.example .env
+```
+Edit the `.env` file to include your `DOPPLER_TOKEN`. Then, start the container:
+```bash
+docker compose up -d
+```
 
 ## AI Use Disclaimer
 > **Notice**: This project, its architecture, and its source code were generated with the assistance of an AI coding agent. While the architecture is designed with security best practices in mind (such as file-less SSH key injection and strict API key validation), you should independently review and verify all security-critical components before using this in a production environment.

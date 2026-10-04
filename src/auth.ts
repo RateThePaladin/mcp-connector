@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { OAuth2Client } from 'google-auth-library';
+import jwt from 'jsonwebtoken';
 
 const client = new OAuth2Client();
 
@@ -20,10 +21,34 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
       return;
     }
 
-    // 2. Check Google Credentials
+    // 2. Check Custom JWT (Minted by /api/register)
+    if (process.env.JWT_SECRET) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET) as { email: string };
+        
+        // Re-verify against Doppler list (Revocation Check)
+        const allowedEmailsStr = process.env.ALLOWED_GOOGLE_EMAILS;
+        if (allowedEmailsStr) {
+          const allowedEmails = allowedEmailsStr.split(',').map(e => e.trim().toLowerCase());
+          if (!allowedEmails.includes(decoded.email.toLowerCase())) {
+            console.warn(`Revoked access attempt by: ${decoded.email}`);
+            res.status(403).json({ error: 'Your access has been revoked.' });
+            return;
+          }
+        }
+
+        (req as any).user = decoded;
+        next();
+        return;
+      } catch (e) {
+        // Token is invalid or expired, continue to check Google ID Token
+      }
+    }
+
+    // 3. Check Google Credentials (Legacy / Direct ID Token support)
     const allowedEmailsStr = process.env.ALLOWED_GOOGLE_EMAILS;
     if (!allowedEmailsStr) {
-      res.status(401).json({ error: 'Invalid API Key and Google Auth is not configured' });
+      res.status(401).json({ error: 'Invalid API Key, JWT, or Google Auth is not configured' });
       return;
     }
 
@@ -51,7 +76,7 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
       next();
       return;
     } catch (e) {
-      res.status(401).json({ error: 'Invalid API Key or Google Token' });
+      res.status(401).json({ error: 'Invalid API Key, JWT, or Google Token' });
       return;
     }
   } catch (error) {

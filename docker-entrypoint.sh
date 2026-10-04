@@ -17,14 +17,10 @@ fi
 mkdir -p /config
 chown -R abc:"$PGID" /config /app
 
-# Setup KNOWN_HOSTS
+# Setup default known_hosts if needed
 gosu abc bash -c '
   mkdir -p ~/.ssh && chmod 700 ~/.ssh
-  if doppler secrets get KNOWN_HOSTS_B64 --plain | base64 -d > ~/.ssh/known_hosts 2>/dev/null; then
-    chmod 600 ~/.ssh/known_hosts
-  else
-    echo "Warning: KNOWN_HOSTS_B64 secret not found or could not be written. SSH connections may fail."
-  fi
+  touch ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts
 '
 
 # Execute the main process as the unprivileged user

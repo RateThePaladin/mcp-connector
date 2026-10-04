@@ -13,6 +13,18 @@ fi
 # Convert to uppercase prefix
 HOST_PREFIX=$(echo "$HOST_IDENTIFIER" | tr '[:lower:]' '[:upper:]')
 
+# Verify the host is in the ALLOWED_SSH_HOSTS list
+ALLOWED_HOSTS=$(doppler secrets get ALLOWED_SSH_HOSTS --plain 2>/dev/null || echo "$ALLOWED_SSH_HOSTS")
+if [ -z "$ALLOWED_HOSTS" ]; then
+  echo "ERROR: ALLOWED_SSH_HOSTS is not configured in Doppler or environment." >&2
+  exit 1
+fi
+
+if ! echo "$ALLOWED_HOSTS" | tr ',' '\n' | grep -q "^${HOST_IDENTIFIER}$"; then
+  echo "ERROR: Host '${HOST_IDENTIFIER}' is not in the ALLOWED_SSH_HOSTS list." >&2
+  exit 1
+fi
+
 # Fetch connection details directly from Doppler
 # Using || true so that set -e doesn't kill the script if Doppler fails
 TARGET_USER=$(doppler secrets get "${HOST_PREFIX}_USER" --plain 2>/dev/null || true)
@@ -40,8 +52,7 @@ fi
 # Execute command using the resolved user and host
 # We disable set -e temporarily to manually handle and parse SSH failures
 set +e
-printf "%s\n" "$COMMAND" | ssh -o StrictHostKeyChecking=yes \
-    -o UserKnownHostsFile=~/.ssh/known_hosts \
+printf "%s\n" "$COMMAND" | ssh -o StrictHostKeyChecking=accept-new \
     -o BatchMode=yes \
     -o ConnectTimeout=10 \
     "${TARGET_USER}@${TARGET_HOST}" 2> /tmp/ssh_err_$$
@@ -57,8 +68,8 @@ if [ $EXIT_CODE -ne 0 ]; then
 
   if echo "$ERR_OUTPUT" | grep -qi "Host key verification failed"; then
     echo "ERROR: Host Key Verification Failed." >&2
-    echo "The host's fingerprint is missing or has changed." >&2
-    echo "INSTRUCTIONS: Please tell the user they must add the host's public key fingerprint to the 'KNOWN_HOSTS' secret in Doppler." >&2
+    echo "The host's fingerprint has changed since it was first seen." >&2
+    echo "INSTRUCTIONS: Please tell the user they must clear the known_hosts file manually or investigate a potential MITM." >&2
   elif echo "$ERR_OUTPUT" | grep -qi "Permission denied (publickey"; then
     echo "ERROR: Permission Denied." >&2
     echo "The private key was rejected by the server." >&2

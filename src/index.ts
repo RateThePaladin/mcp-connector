@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -9,6 +12,10 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { authMiddleware } from './auth';
 import { executeOnHost } from './ssh';
+import { OAuth2Client } from 'google-auth-library';
+import jwt from 'jsonwebtoken';
+
+const oauthClient = new OAuth2Client();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -128,6 +135,52 @@ if (isStdio) {
 
   // MCP SSE Endpoints (Protected by authMiddleware)
   const transports = new Map<string, SSEServerTransport>();
+
+  // --- OAuth Onboarding Routes ---
+  app.get("/login", (req, res) => {
+    const htmlPath = path.join(__dirname, '../public/login.html');
+    let html = fs.readFileSync(htmlPath, 'utf8');
+    html = html.replace('__GOOGLE_CLIENT_ID__', process.env.GOOGLE_CLIENT_ID || '');
+    res.send(html);
+  });
+
+  app.post("/api/register", express.json(), async (req, res) => {
+    try {
+      const { credential } = req.body;
+      if (!credential) {
+          res.status(400).json({ error: 'Missing credential' });
+          return;
+      }
+
+      // Verify Google Token
+      const ticket = await oauthClient.verifyIdToken({ idToken: credential });
+      const payload = ticket.getPayload();
+      
+      if (!payload || !payload.email || !payload.email_verified) {
+          res.status(401).json({ error: 'Invalid Google Token' });
+          return;
+      }
+
+      // Check against Doppler ALLOWED_GOOGLE_EMAILS
+      const allowedEmails = (process.env.ALLOWED_GOOGLE_EMAILS || '').split(',').map(e => e.trim().toLowerCase());
+      if (!allowedEmails.includes(payload.email.toLowerCase())) {
+          res.status(403).json({ error: 'You are not authorized to generate API keys for this server.' });
+          return;
+      }
+
+      if (!process.env.JWT_SECRET) {
+          res.status(500).json({ error: 'Server misconfiguration: Missing JWT_SECRET' });
+          return;
+      }
+
+      // Mint a persistent JWT
+      const token = jwt.sign({ email: payload.email }, process.env.JWT_SECRET, { expiresIn: '10y' });
+      res.json({ token });
+    } catch (e) {
+      console.error('Registration error:', e);
+      res.status(500).json({ error: 'Internal server error during registration' });
+    }
+  });
 
   // Environment Health Endpoint
   app.get("/debug/health", authMiddleware, (req, res) => {

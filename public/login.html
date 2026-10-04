@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+  <head>
+    <title>MCP Connector Login</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+      body { background-color: #121212; color: #ffffff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+      .container { background: #1e1e1e; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-align: center; }
+      code { background: #2d2d2d; padding: 1rem; border-radius: 4px; display: block; margin-top: 1rem; word-break: break-all; }
+      #error-msg { color: #ff5252; margin-top: 1rem; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Authenticate IDE</h2>
+      
+      <!-- Google Auth Button Mount Point -->
+      <div id="g_id_onload"
+           data-client_id="__GOOGLE_CLIENT_ID__"
+           data-callback="handleCredentialResponse">
+      </div>
+      <div class="g_id_signin" data-type="standard" data-theme="filled_black"></div>
+      
+      <div id="error-msg"></div>
+
+      <!-- Token Display Area -->
+      <div id="token-container" style="display:none;">
+         <h3>Your API Key</h3>
+         <p>Add this to your <code>mcp_config.json</code> under the Authorization header:</p>
+         <code id="api-key-output"></code>
+      </div>
+    </div>
+
+    <script>
+      function handleCredentialResponse(response) {
+        fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential: response.credential })
+        })
+        .then(res => res.json().then(data => ({ status: res.status, body: data })))
+        .then(({ status, body }) => {
+          if (status === 200) {
+            document.getElementById('token-container').style.display = 'block';
+            document.getElementById('api-key-output').innerText = `Authorization: Bearer ${body.token}`;
+            document.getElementById('error-msg').innerText = '';
+          } else {
+            document.getElementById('error-msg').innerText = body.error || 'Authentication failed';
+          }
+        });
+      }
+    </script>
+  </body>
+</html>

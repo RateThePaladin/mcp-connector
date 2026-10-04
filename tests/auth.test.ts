@@ -57,7 +57,7 @@ describe('Auth Middleware', () => {
     await authMiddleware(mockReq as Request, mockRes as Response, nextFunction);
     
     expect(mockRes.status).toHaveBeenCalledWith(401);
-    expect(mockRes.json).toHaveBeenCalledWith({ error: 'Invalid API Key and Google Auth is not configured' });
+    expect(mockRes.json).toHaveBeenCalledWith({ error: 'Invalid API Key, JWT, or Google Auth is not configured' });
   });
 
   it('should accept the correct api key', async () => {
@@ -92,6 +92,6 @@ describe('Auth Middleware', () => {
     await authMiddleware(mockReq as Request, mockRes as Response, nextFunction);
     
     expect(mockRes.status).toHaveBeenCalledWith(401);
-    expect(mockRes.json).toHaveBeenCalledWith({ error: 'Invalid API Key or Google Token' });
+    expect(mockRes.json).toHaveBeenCalledWith({ error: 'Invalid API Key, JWT, or Google Token' });
   });
 });

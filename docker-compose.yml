@@ -1,0 +1,14 @@
+services:
+  mcp-connector:
+    image: ghcr.io/ratethepaladin/mcp-connector:latest
+    container_name: mcp-connector
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - DOPPLER_TOKEN=${DOPPLER_TOKEN}
+      - DEBUG=${DEBUG:-false}
+    volumes:
+      - ./config:/config
