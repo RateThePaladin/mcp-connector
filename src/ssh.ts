@@ -22,7 +22,7 @@ export const executeOnHost = (params: ExecuteHostParams): Promise<string> => {
       console.log(`[DEBUG] Stdin payload: ${command}`);
     }
 
-    exec('doppler secrets download --no-file --format json', (error, stdout, stderr) => {
+    exec('doppler secrets download --no-file --format json', (error, stdout, _stderr) => {
       let dopplerEnv: NodeJS.ProcessEnv = process.env;
       if (!error && stdout) {
         try {

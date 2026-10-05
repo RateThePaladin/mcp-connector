@@ -93,7 +93,7 @@ export const executeProxyRequest = async (params: ProxyRequest) => {
   
   try {
     return JSON.parse(text);
-  } catch (e) {
+  } catch {
     // Return raw text if not JSON
     return text;
   }

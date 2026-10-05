@@ -40,7 +40,7 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
         (req as any).user = decoded;
         next();
         return;
-      } catch (e) {
+      } catch {
         // Token is invalid or expired, continue to check Google ID Token
       }
     }
@@ -75,7 +75,7 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
       (req as any).user = payload;
       next();
       return;
-    } catch (e) {
+    } catch {
       res.status(401).json({ error: 'Invalid API Key, JWT, or Google Token' });
       return;
     }
