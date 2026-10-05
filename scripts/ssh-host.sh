@@ -14,7 +14,7 @@ fi
 HOST_PREFIX=$(echo "$HOST_IDENTIFIER" | tr '[:lower:]' '[:upper:]')
 
 # Verify the host is in the ALLOWED_SSH_HOSTS list
-ALLOWED_HOSTS=$(doppler secrets get ALLOWED_SSH_HOSTS --plain 2>/dev/null || echo "$ALLOWED_SSH_HOSTS")
+ALLOWED_HOSTS="$ALLOWED_SSH_HOSTS"
 if [ -z "$ALLOWED_HOSTS" ]; then
   echo "ERROR: ALLOWED_SSH_HOSTS is not configured in Doppler or environment." >&2
   exit 1
@@ -25,10 +25,12 @@ if ! echo "$ALLOWED_HOSTS" | tr ',' '\n' | grep -q "^${HOST_IDENTIFIER}$"; then
   exit 1
 fi
 
-# Fetch connection details directly from Doppler
-# Using || true so that set -e doesn't kill the script if Doppler fails
-TARGET_USER=$(doppler secrets get "${HOST_PREFIX}_USER" --plain 2>/dev/null || true)
-TARGET_HOST=$(doppler secrets get "${HOST_PREFIX}_HOST" --plain 2>/dev/null || true)
+# Fetch connection details from environment variables injected by Doppler at startup
+USER_VAR="${HOST_PREFIX}_USER"
+TARGET_USER="${!USER_VAR}"
+
+HOST_VAR="${HOST_PREFIX}_HOST"
+TARGET_HOST="${!HOST_VAR}"
 
 if [ -z "$TARGET_USER" ] || [ -z "$TARGET_HOST" ]; then
   echo "ERROR: Missing Doppler Configuration" >&2
@@ -41,8 +43,11 @@ fi
 eval $(ssh-agent -s) > /dev/null
 trap 'kill $SSH_AGENT_PID >/dev/null 2>&1 || true; rm -f /tmp/ssh_err_$$' EXIT
 
-# Securely load the key into ssh-agent from Doppler with a 60-second lifetime
-if ! doppler secrets get "${HOST_PREFIX}_KEY" --plain 2>/dev/null | ssh-add -t 60 - > /dev/null 2>&1; then
+# Securely load the key into ssh-agent from environment with a 60-second lifetime
+KEY_VAR="${HOST_PREFIX}_KEY"
+TARGET_KEY="${!KEY_VAR}"
+
+if ! printf "%s\n" "$TARGET_KEY" | ssh-add -t 60 - > /dev/null 2>&1; then
   echo "ERROR: Missing or Invalid SSH Key" >&2
   echo "Could not load the private key for the requested host from Doppler." >&2
   echo "INSTRUCTIONS: Please tell the user to verify the raw private key exists in Doppler under the format <HOST>_KEY." >&2
@@ -52,7 +57,10 @@ fi
 # Execute command using the resolved user and host
 # We disable set -e temporarily to manually handle and parse SSH failures
 set +e
-printf "%s\n" "$COMMAND" | ssh -o StrictHostKeyChecking=accept-new \
+printf "%s\n" "$COMMAND" | ssh -o ControlMaster=auto \
+    -o ControlPath=~/.ssh/mux_%h_%p_%r \
+    -o ControlPersist=10m \
+    -o StrictHostKeyChecking=accept-new \
     -o BatchMode=yes \
     -o ConnectTimeout=10 \
     "${TARGET_USER}@${TARGET_HOST}" 2> /tmp/ssh_err_$$
