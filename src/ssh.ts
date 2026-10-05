@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import path from 'path';
+import { SecretCache } from './secrets';
 
 export interface ExecuteHostParams {
   host: string;
@@ -22,10 +23,20 @@ export const executeOnHost = (params: ExecuteHostParams): Promise<string> => {
       console.log(`[DEBUG] Stdin payload: ${command}`);
     }
 
+    const hostUpper = host.toUpperCase();
+    const safeEnv = {
+      PATH: process.env.PATH,
+      ALLOWED_SSH_HOSTS: SecretCache.get('ALLOWED_SSH_HOSTS'),
+      [`${hostUpper}_USER`]: SecretCache.get(`${hostUpper}_USER`),
+      [`${hostUpper}_HOST`]: SecretCache.get(`${hostUpper}_HOST`),
+      [`${hostUpper}_KEY`]: SecretCache.get(`${hostUpper}_KEY`)
+    };
+
     // Spawn the wrapper script. It takes: host
     const sshProcess = spawn(scriptPath, [host], {
       // Run completely detached from any shells
-      shell: false
+      shell: false,
+      env: safeEnv as any
     });
 
     // Write the command to stdin to keep it out of process arguments

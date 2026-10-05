@@ -13,7 +13,12 @@ Log in securely with your Google Account. If your email matches the `ALLOWED_GOO
 Your MCP clients must then pass this exact string in their `Authorization: Bearer <key>` headers.
 
 ### Secure SSH Execution
-SSH private keys are managed dynamically via Doppler. Instead of loading keys into Node.js, this app blindly executes a wrapper script (`scripts/ssh-host.sh`). The wrapper starts an isolated `ssh-agent`, securely fetches the required key from Doppler into RAM, and automatically cleans up upon exit using bash traps.
+SSH private keys and connection parameters are managed dynamically via Doppler and fetched asynchronously by a background polling loop every 60 seconds. This allows you to instantly update or invalidate secrets in the Doppler dashboard without ever restarting the container. 
+
+To achieve `<100ms` execution latency, the Node.js server maintains these secrets in memory. When a request is received, the server:
+1. Validates the host identifier against strict alphanumeric constraints (`^[a-zA-Z0-9_-]+$`) and the `ALLOWED_SSH_HOSTS` whitelist.
+2. Constructs a tightly scoped, isolated environment containing **only** the private key and details for that specific requested host, minimizing the blast radius.
+3. Spawns the `scripts/ssh-host.sh` wrapper, which loads the isolated key directly into a temporary `ssh-agent` in RAM and utilizes SSH Multiplexing (`ControlMaster`) to instantly execute the command.
 
 ## Setup
 1. `npm install`

@@ -15,6 +15,7 @@ import { executeOnHost } from './ssh';
 import { executeProxyRequest } from './proxy';
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
+import { SecretCache } from './secrets';
 
 const oauthClient = new OAuth2Client();
 
@@ -139,7 +140,11 @@ const createServer = () => {
 // Check if running in stdio mode
 const isStdio = process.argv.includes('--stdio');
 
-if (isStdio) {
+async function startServer() {
+  await SecretCache.fetch();
+  SecretCache.startPolling();
+
+  if (isStdio) {
   // --- STDIO TRANSPORT (For local IDE testing) ---
   console.error("Starting MCP server in STDIO mode...");
   const server = createServer();
@@ -310,6 +315,7 @@ if (isStdio) {
   // Graceful Shutdown
   const shutdown = () => {
     console.error('Shutting down server...');
+    SecretCache.stopPolling();
     for (const t of transports.values()) { 
       try { 
         t.close(); 
@@ -323,3 +329,6 @@ if (isStdio) {
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 }
+}
+
+startServer().catch(console.error);
