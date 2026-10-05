@@ -1,4 +1,4 @@
-import { spawn, exec } from 'child_process';
+import { spawn } from 'child_process';
 import path from 'path';
 
 export interface ExecuteHostParams {
@@ -22,59 +22,42 @@ export const executeOnHost = (params: ExecuteHostParams): Promise<string> => {
       console.log(`[DEBUG] Stdin payload: ${command}`);
     }
 
-    exec('doppler secrets download --no-file --format json', (error, stdout, _stderr) => {
-      let dopplerEnv: NodeJS.ProcessEnv = process.env;
-      if (!error && stdout) {
-        try {
-          const secrets = JSON.parse(stdout);
-          dopplerEnv = { ...process.env, ...secrets };
-        } catch (e) {
-          if (process.env.DEBUG === 'true') {
-            console.error(`[DEBUG] Failed to parse Doppler secrets dynamically:`, e);
-          }
-        }
-      } else if (error && process.env.DEBUG === 'true') {
-        console.error(`[DEBUG] Failed to fetch Doppler secrets dynamically:`, error);
+    // Spawn the wrapper script. It takes: host
+    const sshProcess = spawn(scriptPath, [host], {
+      // Run completely detached from any shells
+      shell: false
+    });
+
+    // Write the command to stdin to keep it out of process arguments
+    sshProcess.stdin.write(command);
+    sshProcess.stdin.end();
+
+    let stdoutData = '';
+    let stderrData = '';
+
+    sshProcess.stdout.on('data', (data) => {
+      stdoutData += data.toString();
+    });
+
+    sshProcess.stderr.on('data', (data) => {
+      stderrData += data.toString();
+    });
+
+    sshProcess.on('close', (code) => {
+      if (process.env.DEBUG === 'true') {
+        console.log(`[DEBUG] SSH wrapper exited with code: ${code}`);
+        console.log(`[DEBUG] Stdout buffer: ${stdoutData.trim()}`);
+        console.log(`[DEBUG] Stderr buffer: ${stderrData.trim()}`);
       }
-
-      // Spawn the wrapper script. It takes: host
-      const sshProcess = spawn(scriptPath, [host], {
-        // Run completely detached from any shells
-        shell: false,
-        env: dopplerEnv
-      });
-
-      // Write the command to stdin to keep it out of process arguments
-      sshProcess.stdin.write(command);
-      sshProcess.stdin.end();
-
-      let stdoutData = '';
-      let stderrData = '';
-
-      sshProcess.stdout.on('data', (data) => {
-        stdoutData += data.toString();
-      });
-
-      sshProcess.stderr.on('data', (data) => {
-        stderrData += data.toString();
-      });
-
-      sshProcess.on('close', (code) => {
-        if (process.env.DEBUG === 'true') {
-          console.log(`[DEBUG] SSH wrapper exited with code: ${code}`);
-          console.log(`[DEBUG] Stdout buffer: ${stdoutData.trim()}`);
-          console.log(`[DEBUG] Stderr buffer: ${stderrData.trim()}`);
-        }
-        if (code !== 0) {
-          // Return a clean error message that encapsulates the command failure
-          return reject(new Error(`Command failed with exit code ${code}\nStderr: ${stderrData.trim()}`));
-        }
-        resolve(stdoutData.trim());
-      });
-      
-      sshProcess.on('error', (err) => {
-        reject(new Error(`Failed to spawn SSH wrapper: ${err.message}`));
-      });
+      if (code !== 0) {
+        // Return a clean error message that encapsulates the command failure
+        return reject(new Error(`Command failed with exit code ${code}\nStderr: ${stderrData.trim()}`));
+      }
+      resolve(stdoutData.trim());
+    });
+    
+    sshProcess.on('error', (err) => {
+      reject(new Error(`Failed to spawn SSH wrapper: ${err.message}`));
     });
   });
 };

@@ -1,5 +1,5 @@
 import { executeOnHost } from '../src/ssh';
-import { spawn, exec } from 'child_process';
+import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 
 jest.mock('child_process');
@@ -17,9 +17,6 @@ describe('SSH Execution Module', () => {
     mockProcess.stdin = { write: jest.fn(), end: jest.fn() };
     
     (spawn as jest.Mock).mockReturnValue(mockProcess);
-    (exec as unknown as jest.Mock).mockImplementation((cmd: string, callback: any) => {
-      callback(null, '{}', '');
-    });
 
     const execPromise = executeOnHost({ host: 'valid-host', command: 'echo "test"' });
 
@@ -32,7 +29,7 @@ describe('SSH Execution Module', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.stringContaining('ssh-host.sh'),
       ['valid-host'],
-      { shell: false, env: expect.any(Object) }
+      { shell: false }
     );
     expect(mockProcess.stdin.write).toHaveBeenCalledWith('echo "test"');
   });
