@@ -267,8 +267,14 @@ if (isStdio) {
         console.log(`[DEBUG] Session initialized with ID: ${transport.sessionId}`);
       }
 
+      // Send a keep-alive ping every 15 seconds to prevent Nginx from dropping the SSE connection
+      const pingInterval = setInterval(() => {
+        res.write(': keepalive\n\n');
+      }, 15000);
+
       // Clean up memory when the client disconnects
       res.on('close', () => {
+        clearInterval(pingInterval);
         if (process.env.DEBUG === 'true') {
           console.log(`[DEBUG] Session disconnected: ${transport.sessionId}`);
         }

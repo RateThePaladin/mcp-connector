@@ -4,15 +4,15 @@ A production-grade TypeScript MCP server that securely executes arbitrary comman
 
 ## Security Architecture
 This project is designed to operate securely on a local network (LAN) behind an Nginx TLS reverse proxy.
-Authentication is handled via a static API key passed as a Bearer token (`MCP_API_KEY`).
+Authentication is handled natively through Google Identity Services (GSI) via a sleek authentication portal.
 
 ### Generating an API Key
-To generate a secure API key on your terminal (Mac/Linux), run:
-```bash
-openssl rand -hex 32
-```
-Save this key as the `MCP_API_KEY` secret in your Doppler dashboard. Your MCP clients must then pass this exact string in their `Authorization: Bearer <key>` headers.
+When the container is running, navigate to its exposed web UI (e.g., `http://localhost:3000/login` or your reverse proxy domain) in your browser. 
+Log in securely with your Google Account. If your email matches the `ALLOWED_GOOGLE_EMAILS` whitelist defined in Doppler, the server will instantly mint a long-lived JWT API Key. 
 
+Your MCP clients must then pass this exact string in their `Authorization: Bearer <key>` headers.
+
+### Secure SSH Execution
 SSH private keys are managed dynamically via Doppler. Instead of loading keys into Node.js, this app blindly executes a wrapper script (`scripts/ssh-host.sh`). The wrapper starts an isolated `ssh-agent`, securely fetches the required key from Doppler into RAM, and automatically cleans up upon exit using bash traps.
 
 ## Setup
@@ -23,26 +23,26 @@ SSH private keys are managed dynamically via Doppler. Instead of loading keys in
 ### Doppler Secret Configuration
 This server strictly relies on a file-less runtime. Private keys and connection details are never saved to disk. To enable connections to a host, you must define the following three variables in your Doppler dashboard, matching your `host` identifier. 
 
-For example, to connect to the identifier `node`, define:
-- `NODE_USER`: The SSH username (e.g., `root`)
-- `NODE_HOST`: The IP Address or Hostname (e.g., `192.168.1.50`)
-- `NODE_KEY`: The raw RSA/ED25519 private key contents
+To connect to an SSH host (for example, with the identifier `app-server`), define:
+- `APP-SERVER_USER`: The SSH username (e.g., `root`)
+- `APP-SERVER_HOST`: The IP Address or Hostname (e.g., `10.0.0.50`)
+- `APP-SERVER_KEY`: The raw RSA/ED25519 private key contents
 
-To prevent Man-in-the-Middle (MITM) attacks, you must also define a `KNOWN_HOSTS_B64` secret containing the base64-encoded public key fingerprints of all your target servers.
+To prevent unauthorized execution, you must define the `ALLOWED_SSH_HOSTS` variable in Doppler as a comma-separated whitelist of host identifiers (e.g., `app-server,db-server,backup`).
 
-### Generating KNOWN_HOSTS_B64
-Here is how to generate this safely on your local machine (Linux/Mac):
+### Application API Proxy
+The MCP Server also natively supports the `application_api_request` tool, which acts as a secure reverse-proxy for making API requests to internal services without exposing credentials directly to the AI agent.
 
-1. **Scan your target hosts** and save their fingerprints to a file:
-   ```bash
-   ssh-keyscan -H 192.168.1.50 > my_known_hosts
-   ssh-keyscan -H 192.168.1.51 >> my_known_hosts # use >> to append additional hosts
-   ```
-2. **Convert the file to a single Base64 string**:
-   ```bash
-   cat my_known_hosts | base64 | tr -d '\n'
-   ```
-3. Copy the exact output string and paste it into your Doppler dashboard as the `KNOWN_HOSTS_B64` secret.
+Variables must follow the strict naming convention: `<HOST>_<APP>_<SECRET_TYPE>`
+
+For static API key authentication (e.g., typical media stacks), set:
+- `HOST_APP_URL`: Base URL (e.g., `http://10.0.0.60:8080`) -> **Note: Do NOT include a trailing slash!**
+- `HOST_APP_API_KEY`: The static API Key
+
+For stateful applications requiring session logins (e.g., download clients, Nginx proxies), set:
+- `HOST_APP_URL`: Base URL (e.g., `http://10.0.0.60:8181`) -> **Note: Do NOT include a trailing slash!**
+- `HOST_APP_USERNAME`: The web UI username
+- `HOST_APP_PASSWORD`: The web UI password
 
 ## Deployment
 
