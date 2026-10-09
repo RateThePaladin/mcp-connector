@@ -2,6 +2,7 @@ services:
   mcp-connector:
     image: ghcr.io/ratethepaladin/mcp-connector:latest
     container_name: mcp-connector
+    init: true
     restart: unless-stopped
     ports:
       - "3000:3000"

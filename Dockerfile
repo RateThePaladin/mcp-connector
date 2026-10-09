@@ -13,6 +13,7 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
+    tini \
     openssh-client \
     gosu \
     curl \
@@ -34,4 +35,4 @@ COPY docker-entrypoint.sh ./
 
 RUN chmod +x docker-entrypoint.sh scripts/ssh-host.sh
 
-ENTRYPOINT ["./docker-entrypoint.sh"]
+ENTRYPOINT ["tini", "--", "./docker-entrypoint.sh"]
