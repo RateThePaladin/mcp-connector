@@ -1,3 +1,5 @@
+import { SecretCache } from './secrets';
+
 interface ProxyRequest {
   application: string;
   host: string;
@@ -9,6 +11,10 @@ interface ProxyRequest {
 // In-memory cache for temporary session tokens/cookies
 const sessionCache = new Map<string, string>();
 
+const getSecret = (key: string): string | undefined => {
+  return process.env[key] || SecretCache.get(key);
+};
+
 const getSessionAuth = async (application: string, host: string, baseUrl: string, envPrefix: string): Promise<Record<string, string>> => {
   const cacheKey = `${host}_${application}`;
   
@@ -16,8 +22,8 @@ const getSessionAuth = async (application: string, host: string, baseUrl: string
     if (sessionCache.has(cacheKey)) return { 'Cookie': sessionCache.get(cacheKey)! };
     
     // Perform login
-    const username = process.env[`${envPrefix}_USERNAME`];
-    const password = process.env[`${envPrefix}_PASSWORD`];
+    const username = getSecret(`${envPrefix}_USERNAME`);
+    const password = getSecret(`${envPrefix}_PASSWORD`);
     
     if (!username || !password) {
       throw new Error(`Missing ${envPrefix}_USERNAME or ${envPrefix}_PASSWORD`);
@@ -43,8 +49,13 @@ const getSessionAuth = async (application: string, host: string, baseUrl: string
 export const executeProxyRequest = async (params: ProxyRequest) => {
   const { application, host, method, endpoint, body } = params;
   
-  const envPrefix = `${host.toUpperCase()}_${application.toUpperCase()}`;
-  const baseUrl = process.env[`${envPrefix}_URL`];
+  const normalizedApp = application.toLowerCase();
+  const envPrefix = `${host.toUpperCase()}_${application.toUpperCase().replace(/-/g, '_')}`;
+  
+  let baseUrl = getSecret(`${envPrefix}_URL`);
+  if (!baseUrl && (normalizedApp === 'echarr' || normalizedApp === 'echarr-dev')) {
+    baseUrl = getSecret('NODE_ECHARR_DEV_URL') || getSecret('NODE_ECHARR_URL');
+  }
 
   if (!baseUrl) {
     throw new Error(`Application ${application} on host ${host} missing URL configuration (expected ${envPrefix}_URL).`);
@@ -56,28 +67,31 @@ export const executeProxyRequest = async (params: ProxyRequest) => {
   };
 
   // 1. Static API Keys
-  if (['sonarr', 'radarr', 'overseerr', 'prowlarr', 'bazarr'].includes(application.toLowerCase())) {
-    const apiKey = process.env[`${envPrefix}_API_KEY`];
+  if (['sonarr', 'radarr', 'overseerr', 'prowlarr', 'bazarr', 'echarr', 'echarr-dev'].includes(normalizedApp)) {
+    let apiKey = getSecret(`${envPrefix}_API_KEY`);
+    if (!apiKey && (normalizedApp === 'echarr' || normalizedApp === 'echarr-dev')) {
+      apiKey = getSecret('NODE_ECHARR_DEV_API_KEY') || getSecret('NODE_ECHARR_API_KEY');
+    }
     if (!apiKey) throw new Error(`Missing ${envPrefix}_API_KEY`);
     headers['X-Api-Key'] = apiKey;
-  } else if (application.toLowerCase() === 'plex') {
-    const apiKey = process.env[`${envPrefix}_API_KEY`];
+  } else if (normalizedApp === 'plex') {
+    const apiKey = getSecret(`${envPrefix}_API_KEY`);
     if (!apiKey) throw new Error(`Missing ${envPrefix}_API_KEY`);
     headers['X-Plex-Token'] = apiKey;
-  } else if (application.toLowerCase() === 'pihole') {
+  } else if (normalizedApp === 'pihole') {
     // Pi-hole auth is typically sent as an auth parameter in the query string
     // Here we can inject it into the endpoint or handle it manually
   } 
   // 2. Stateful Session Auth
   else {
-    const authHeaders = await getSessionAuth(application.toLowerCase(), host, baseUrl, envPrefix);
+    const authHeaders = await getSessionAuth(normalizedApp, host, baseUrl, envPrefix);
     headers = { ...headers, ...authHeaders };
   }
 
   const targetUrl = new URL(`${baseUrl}${endpoint}`);
   
-  if (application.toLowerCase() === 'pihole') {
-    const apiKey = process.env[`${envPrefix}_API_KEY`];
+  if (normalizedApp === 'pihole') {
+    const apiKey = getSecret(`${envPrefix}_API_KEY`);
     if (apiKey) targetUrl.searchParams.append('auth', apiKey);
   }
 

@@ -63,7 +63,7 @@ const createServer = () => {
           inputSchema: {
             type: "object",
             properties: {
-              application: { type: "string", description: "Target app (e.g., sonarr, nginx)" },
+              application: { type: "string", description: "Target app (e.g., echarr, sonarr, nginx)" },
               host: { type: "string", description: "Target host (e.g., node, synology)" },
               method: { type: "string", description: "HTTP method (GET, POST, PUT, DELETE)" },
               endpoint: { type: "string", description: "API path (e.g., /api/v3/system/status)" },
