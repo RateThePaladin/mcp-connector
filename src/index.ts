@@ -13,6 +13,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { authMiddleware } from './auth';
 import { executeOnHost } from './ssh';
 import { executeProxyRequest } from './proxy';
+import { waitForCondition } from './utils/polling';
+import * as echarr from './tools/echarr';
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 import { SecretCache } from './secrets';
@@ -63,13 +65,151 @@ const createServer = () => {
           inputSchema: {
             type: "object",
             properties: {
-              application: { type: "string", description: "Target app (e.g., echarr, sonarr, nginx)" },
+              application: { type: "string", description: "Target app (e.g., echarr, echarr-dev, sonarr, nginx)" },
               host: { type: "string", description: "Target host (e.g., node, synology)" },
               method: { type: "string", description: "HTTP method (GET, POST, PUT, DELETE)" },
               endpoint: { type: "string", description: "API path (e.g., /api/v3/system/status)" },
-              body: { type: "object", description: "Optional JSON payload" }
+              body: { type: "object", description: "Optional JSON payload" },
+              select: {
+                type: "array",
+                items: { type: "string" },
+                description: "Optional list of dot-notation property paths to project/filter in the response"
+              }
             },
             required: ["application", "host", "method", "endpoint"]
+          }
+        },
+        {
+          name: "wait_for_condition",
+          description: "Polls an internal application endpoint repeatedly until a specified JSON field matches an expected value or timeout is reached. Operates directly on the low-latency LAN without LLM turn overhead.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              application: { type: "string", description: "Target app (e.g., echarr, echarr-dev, sonarr, qbittorrent)" },
+              host: { type: "string", description: "Target host (e.g., node, synology), defaults to 'node'" },
+              endpoint: { type: "string", description: "API path to poll (e.g., /api/books/123/download-status)" },
+              targetField: { type: "string", description: "Dot-notation field to check (e.g., 'isImported' or 'activeDownload.state')" },
+              expectedValue: { description: "Expected value for targetField. If omitted, checks for truthy/non-null." },
+              timeoutSeconds: { type: "number", description: "Timeout in seconds (default 30, max 60)" },
+              intervalMs: { type: "number", description: "Poll interval in milliseconds (default 1000, min 250)" },
+              select: {
+                type: "array",
+                items: { type: "string" },
+                description: "Optional list of dot-notation property paths to project in the returned response"
+              }
+            },
+            required: ["application", "endpoint", "targetField"]
+          }
+        },
+        {
+          name: "echarr_search_series",
+          description: "Targeted library search for series and books in Echarr. Returns lightweight series summaries with book previews.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              query: { type: "string", description: "Search query across series title, author, or book titles" },
+              title: { type: "string", description: "Optional filter specifically by series title" },
+              author: { type: "string", description: "Optional filter specifically by author" },
+              limit: { type: "number", description: "Max series results to return (e.g., 5)" },
+              isDev: { type: "boolean", description: "Set to true to target echarr-dev instead of production" },
+              app: { type: "string", description: "Explicit application slug ('echarr' or 'echarr-dev')" },
+              host: { type: "string", description: "Target host (defaults to 'node')" },
+              select: {
+                type: "array",
+                items: { type: "string" },
+                description: "Optional list of dot-notation fields to project in the response"
+              }
+            }
+          }
+        },
+        {
+          name: "echarr_get_book_status",
+          description: "Retrieves single-book lifecycle status, active torrent progress/state, latest import record, and isImported indicator from Echarr.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              bookId: { type: "string", description: "Echarr book identifier" },
+              isDev: { type: "boolean", description: "Set to true to target echarr-dev instead of production" },
+              app: { type: "string", description: "Explicit application slug ('echarr' or 'echarr-dev')" },
+              host: { type: "string", description: "Target host (defaults to 'node')" },
+              select: {
+                type: "array",
+                items: { type: "string" },
+                description: "Optional list of dot-notation fields to project in the response"
+              }
+            },
+            required: ["bookId"]
+          }
+        },
+        {
+          name: "echarr_request_book",
+          description: "Requests a book in Echarr via Goodreads URL or title/author. Can automatically initiate Prowlarr search and download client grab if autoGrab is true.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              goodreadsUrl: { type: "string", description: "Goodreads book URL for auto-resolving metadata" },
+              title: { type: "string", description: "Book title (required if goodreadsUrl is not provided)" },
+              author: { type: "string", description: "Author name" },
+              seriesTitle: { type: "string", description: "Optional series container title" },
+              autoGrab: { type: "boolean", description: "Automatically search Prowlarr and send to torrent client (defaults to true)" },
+              monitored: { type: "boolean", description: "Monitor for releases (defaults to true)" },
+              isDev: { type: "boolean", description: "Set to true to target echarr-dev instead of production" },
+              app: { type: "string", description: "Explicit application slug ('echarr' or 'echarr-dev')" },
+              host: { type: "string", description: "Target host (defaults to 'node')" }
+            }
+          }
+        },
+        {
+          name: "echarr_auto_grab_book",
+          description: "Triggers an immediate Prowlarr indexer search and download client grab for an existing book in the Echarr library by book ID.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              bookId: { type: "string", description: "Echarr book identifier" },
+              seriesId: { type: "string", description: "Optional parent series identifier" },
+              isDev: { type: "boolean", description: "Set to true to target echarr-dev instead of production" },
+              app: { type: "string", description: "Explicit application slug ('echarr' or 'echarr-dev')" },
+              host: { type: "string", description: "Target host (defaults to 'node')" }
+            },
+            required: ["bookId"]
+          }
+        },
+        {
+          name: "echarr_sync_series",
+          description: "Atomic post-import synchronization for a series in Echarr. Rewrites audio tags, refreshes Plex library section, and syncs Plex playlists in a single atomic call.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              seriesId: { type: "string", description: "Echarr series identifier" },
+              syncAudioTags: { type: "boolean", description: "Rewrite audio tags (defaults to true)" },
+              refreshPlex: { type: "boolean", description: "Refresh Plex library section (defaults to true)" },
+              syncPlaylist: { type: "boolean", description: "Synchronize Plex series playlist (defaults to true)" },
+              isDev: { type: "boolean", description: "Set to true to target echarr-dev instead of production" },
+              app: { type: "string", description: "Explicit application slug ('echarr' or 'echarr-dev')" },
+              host: { type: "string", description: "Target host (defaults to 'node')" }
+            },
+            required: ["seriesId"]
+          }
+        },
+        {
+          name: "echarr_wait_for_book",
+          description: "Blocks and polls Echarr directly over LAN until a book finishes downloading and importing (isImported: true), or until timeout.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              bookId: { type: "string", description: "Echarr book identifier" },
+              timeoutSeconds: { type: "number", description: "Timeout in seconds (default 30, max 60)" },
+              intervalMs: { type: "number", description: "Poll interval in milliseconds (default 1000, min 250)" },
+              isDev: { type: "boolean", description: "Set to true to target echarr-dev instead of production" },
+              app: { type: "string", description: "Explicit application slug ('echarr' or 'echarr-dev')" },
+              host: { type: "string", description: "Target host (defaults to 'node')" },
+              select: {
+                type: "array",
+                items: { type: "string" },
+                description: "Optional list of dot-notation fields to project in the response"
+              }
+            },
+            required: ["bookId"]
           }
         }
       ],
@@ -77,11 +217,12 @@ const createServer = () => {
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    if (request.params.name === "execute_on_host") {
-      const host = String(request.params.arguments?.host);
-      const command = String(request.params.arguments?.command);
+    const { name, arguments: args } = request.params;
 
-      try {
+    try {
+      if (name === "execute_on_host") {
+        const host = String(args?.host);
+        const command = String(args?.command);
         const output = await executeOnHost({ host, command });
         return {
           content: [
@@ -91,26 +232,17 @@ const createServer = () => {
             },
           ],
         };
-      } catch (error) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: `Error executing command: ${error instanceof Error ? error.message : String(error)}`,
-            },
-          ],
-        };
       }
-    } else if (request.params.name === "application_api_request") {
-      const application = String(request.params.arguments?.application);
-      const host = String(request.params.arguments?.host);
-      const method = String(request.params.arguments?.method);
-      const endpoint = String(request.params.arguments?.endpoint);
-      const body = request.params.arguments?.body;
 
-      try {
-        const output = await executeProxyRequest({ application, host, method, endpoint, body });
+      if (name === "application_api_request") {
+        const application = String(args?.application);
+        const host = String(args?.host);
+        const method = String(args?.method);
+        const endpoint = String(args?.endpoint);
+        const body = args?.body;
+        const select = Array.isArray(args?.select) ? (args?.select as string[]) : undefined;
+
+        const output = await executeProxyRequest({ application, host, method, endpoint, body, select });
         return {
           content: [
             {
@@ -119,19 +251,181 @@ const createServer = () => {
             },
           ],
         };
-      } catch (error) {
+      }
+
+      if (name === "wait_for_condition") {
+        const application = String(args?.application);
+        const host = args?.host ? String(args.host) : undefined;
+        const endpoint = String(args?.endpoint);
+        const targetField = String(args?.targetField);
+        const expectedValue = args?.expectedValue;
+        const timeoutSeconds = typeof args?.timeoutSeconds === 'number' ? args.timeoutSeconds : undefined;
+        const intervalMs = typeof args?.intervalMs === 'number' ? args.intervalMs : undefined;
+        const select = Array.isArray(args?.select) ? (args?.select as string[]) : undefined;
+
+        const output = await waitForCondition({
+          application,
+          host,
+          endpoint,
+          targetField,
+          expectedValue,
+          timeoutSeconds,
+          intervalMs,
+          select
+        });
+
         return {
-          isError: true,
           content: [
             {
               type: "text",
-              text: `Error executing API request: ${error instanceof Error ? error.message : String(error)}`,
+              text: JSON.stringify(output, null, 2),
             },
           ],
         };
       }
+
+      if (name === "echarr_search_series" || name === "echarr_find_series") {
+        const output = await echarr.searchSeries({
+          query: args?.query ? String(args.query) : undefined,
+          title: args?.title ? String(args.title) : undefined,
+          author: args?.author ? String(args.author) : undefined,
+          limit: typeof args?.limit === 'number' ? args.limit : undefined,
+          isDev: typeof args?.isDev === 'boolean' ? args.isDev : undefined,
+          app: args?.app ? String(args.app) : undefined,
+          host: args?.host ? String(args.host) : undefined,
+          select: Array.isArray(args?.select) ? (args?.select as string[]) : undefined,
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: typeof output === 'string' ? output : JSON.stringify(output, null, 2),
+            },
+          ],
+        };
+      }
+
+      if (name === "echarr_get_book_status") {
+        const bookId = String(args?.bookId);
+        const output = await echarr.getBookStatus({
+          bookId,
+          isDev: typeof args?.isDev === 'boolean' ? args.isDev : undefined,
+          app: args?.app ? String(args.app) : undefined,
+          host: args?.host ? String(args.host) : undefined,
+          select: Array.isArray(args?.select) ? (args?.select as string[]) : undefined,
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: typeof output === 'string' ? output : JSON.stringify(output, null, 2),
+            },
+          ],
+        };
+      }
+
+      if (name === "echarr_request_book" || name === "echarr_grab_book") {
+        const output = await echarr.requestBook({
+          goodreadsUrl: args?.goodreadsUrl ? String(args.goodreadsUrl) : undefined,
+          title: args?.title ? String(args.title) : undefined,
+          author: args?.author ? String(args.author) : undefined,
+          seriesTitle: args?.seriesTitle ? String(args.seriesTitle) : undefined,
+          autoGrab: typeof args?.autoGrab === 'boolean' ? args.autoGrab : undefined,
+          monitored: typeof args?.monitored === 'boolean' ? args.monitored : undefined,
+          isDev: typeof args?.isDev === 'boolean' ? args.isDev : undefined,
+          app: args?.app ? String(args.app) : undefined,
+          host: args?.host ? String(args.host) : undefined,
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: typeof output === 'string' ? output : JSON.stringify(output, null, 2),
+            },
+          ],
+        };
+      }
+
+      if (name === "echarr_auto_grab_book") {
+        const bookId = String(args?.bookId);
+        const seriesId = args?.seriesId ? String(args.seriesId) : undefined;
+        const output = await echarr.autoGrabBook({
+          bookId,
+          seriesId,
+          isDev: typeof args?.isDev === 'boolean' ? args.isDev : undefined,
+          app: args?.app ? String(args.app) : undefined,
+          host: args?.host ? String(args.host) : undefined,
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: typeof output === 'string' ? output : JSON.stringify(output, null, 2),
+            },
+          ],
+        };
+      }
+
+      if (name === "echarr_sync_series") {
+        const seriesId = String(args?.seriesId);
+        const output = await echarr.syncSeries({
+          seriesId,
+          syncAudioTags: typeof args?.syncAudioTags === 'boolean' ? args.syncAudioTags : undefined,
+          refreshPlex: typeof args?.refreshPlex === 'boolean' ? args.refreshPlex : undefined,
+          syncPlaylist: typeof args?.syncPlaylist === 'boolean' ? args.syncPlaylist : undefined,
+          isDev: typeof args?.isDev === 'boolean' ? args.isDev : undefined,
+          app: args?.app ? String(args.app) : undefined,
+          host: args?.host ? String(args.host) : undefined,
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: typeof output === 'string' ? output : JSON.stringify(output, null, 2),
+            },
+          ],
+        };
+      }
+
+      if (name === "echarr_wait_for_book") {
+        const bookId = String(args?.bookId);
+        const output = await echarr.waitForBookImport({
+          bookId,
+          timeoutSeconds: typeof args?.timeoutSeconds === 'number' ? args.timeoutSeconds : undefined,
+          intervalMs: typeof args?.intervalMs === 'number' ? args.intervalMs : undefined,
+          isDev: typeof args?.isDev === 'boolean' ? args.isDev : undefined,
+          app: args?.app ? String(args.app) : undefined,
+          host: args?.host ? String(args.host) : undefined,
+          select: Array.isArray(args?.select) ? (args?.select as string[]) : undefined,
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(output, null, 2),
+            },
+          ],
+        };
+      }
+
+      throw new Error(`Tool not found: ${name}`);
+    } catch (error) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: `Error executing ${name}: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
     }
-    throw new Error("Tool not found");
   });
 
   return server;

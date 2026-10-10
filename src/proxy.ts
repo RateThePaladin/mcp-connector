@@ -1,11 +1,13 @@
 import { SecretCache } from './secrets';
+import { applyProjection } from './utils/projection';
 
-interface ProxyRequest {
+export interface ProxyRequest {
   application: string;
   host: string;
   method: string;
   endpoint: string;
   body?: any;
+  select?: string[];
 }
 
 // In-memory cache for temporary session tokens/cookies
@@ -47,15 +49,12 @@ const getSessionAuth = async (application: string, host: string, baseUrl: string
 };
 
 export const executeProxyRequest = async (params: ProxyRequest) => {
-  const { application, host, method, endpoint, body } = params;
+  const { application, host, method, endpoint, body, select } = params;
   
   const normalizedApp = application.toLowerCase();
   const envPrefix = `${host.toUpperCase()}_${application.toUpperCase().replace(/-/g, '_')}`;
   
-  let baseUrl = getSecret(`${envPrefix}_URL`);
-  if (!baseUrl && (normalizedApp === 'echarr' || normalizedApp === 'echarr-dev')) {
-    baseUrl = getSecret('NODE_ECHARR_DEV_URL') || getSecret('NODE_ECHARR_URL');
-  }
+  const baseUrl = getSecret(`${envPrefix}_URL`);
 
   if (!baseUrl) {
     throw new Error(`Application ${application} on host ${host} missing URL configuration (expected ${envPrefix}_URL).`);
@@ -68,10 +67,7 @@ export const executeProxyRequest = async (params: ProxyRequest) => {
 
   // 1. Static API Keys
   if (['sonarr', 'radarr', 'overseerr', 'prowlarr', 'bazarr', 'echarr', 'echarr-dev'].includes(normalizedApp)) {
-    let apiKey = getSecret(`${envPrefix}_API_KEY`);
-    if (!apiKey && (normalizedApp === 'echarr' || normalizedApp === 'echarr-dev')) {
-      apiKey = getSecret('NODE_ECHARR_DEV_API_KEY') || getSecret('NODE_ECHARR_API_KEY');
-    }
+    const apiKey = getSecret(`${envPrefix}_API_KEY`);
     if (!apiKey) throw new Error(`Missing ${envPrefix}_API_KEY`);
     headers['X-Api-Key'] = apiKey;
   } else if (normalizedApp === 'plex') {
@@ -106,9 +102,14 @@ export const executeProxyRequest = async (params: ProxyRequest) => {
   const text = await response.text();
   
   try {
-    return JSON.parse(text);
+    const parsed = JSON.parse(text);
+    if (select && select.length > 0) {
+      return applyProjection(parsed, select);
+    }
+    return parsed;
   } catch {
     // Return raw text if not JSON
     return text;
   }
-}
+};
+
