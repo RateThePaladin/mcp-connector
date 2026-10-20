@@ -18,6 +18,7 @@ import * as echarr from './tools/echarr';
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 import { SecretCache } from './secrets';
+import { stopPolling as stopTelegramPolling } from './security/telegram';
 
 const oauthClient = new OAuth2Client();
 
@@ -610,6 +611,7 @@ async function startServer() {
   const shutdown = () => {
     console.error('Shutting down server...');
     SecretCache.stopPolling();
+    stopTelegramPolling();
     for (const t of transports.values()) { 
       try { 
         t.close(); 

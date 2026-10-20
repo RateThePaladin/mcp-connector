@@ -6,3 +6,9 @@ coverage/
 *.key.tmpl
 .agents/
 docs/proxy_architecture.md
+
+# Data and command histories
+*.jsonl
+*.corpus.json
+mcp_commands_history*
+sample_commands*

@@ -20,6 +20,21 @@ To achieve `<100ms` execution latency, the Node.js server maintains these secret
 2. Constructs a tightly scoped, isolated environment containing **only** the private key and details for that specific requested host, minimizing the blast radius.
 3. Spawns the `scripts/ssh-host.sh` wrapper, which loads the isolated key directly into a temporary `ssh-agent` in RAM and utilizes SSH Multiplexing (`ControlMaster`) to instantly execute the command.
 
+### Deterministic Command Guardrails & Telegram Approval
+To prevent AI agent hallucinations, malformed commands, or accidental destructive catastrophes (e.g. `rm -rf /`, unbound variable wipes `rm -rf "${VAR}"/*`, raw block device overwrites, Docker volume destruction, or ZFS pool wipes), all commands passed to `execute_on_host` are screened by a zero-overhead guardrail engine (`< 0.1ms` latency) before touching SSH:
+
+1. **Deterministic Filter**: Checks commands against 13 security rules targeting catastrophic root/system wipes, device formatting, volume deletion, and fork bombs.
+2. **Interactive Human-in-the-Loop (HITL) Override via Telegram**:
+   - **Tier 1 (Instant 30s Hold)**: When a guarded command is triggered, an interactive Telegram alert with `[Approve]` and `[Reject]` buttons is dispatched. If you approve within 30 seconds, the command executes immediately without turn interruptions.
+   - **Tier 2 (30-Minute Fallback)**: If 30 seconds elapses, the MCP returns an Approval ID (`#<ID>`) to the agent. When approved on Telegram within 30 minutes, you can prompt the agent to retry.
+   - **Single-Use Consumption**: Approvals are bound strictly to `sha256(host + ":" + command)` and consumed immediately upon execution.
+   - **Zero Idle CPU**: Outbound Telegram polling runs only when an approval request is pending and stays dormant when idle.
+
+To configure Telegram approvals in Doppler or `.env`:
+- `TELEGRAM_BOT_TOKEN`: Bot token from `@BotFather`
+- `TELEGRAM_CHAT_ID`: Your Telegram numeric User/Chat ID
+- `SECURITY_GUARDRAILS_ENABLED`: Defaults to `true` (can be set to `false` to disable)
+
 ## Setup
 1. `npm install`
 2. `npm run build`

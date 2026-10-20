@@ -1,21 +1,69 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import { SecretCache } from './secrets';
+import { validateCommand } from './security/guardrail';
+import { ApprovalManager } from './security/approvalManager';
 
 export interface ExecuteHostParams {
   host: string;
   command: string;
 }
 
-export const executeOnHost = (params: ExecuteHostParams): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const { host, command } = params;
+export const executeOnHost = async (params: ExecuteHostParams): Promise<string> => {
+  const { host, command } = params;
 
-    // Strict validation of the host identifier to prevent injection in the bash script
-    if (!/^[a-zA-Z0-9_-]+$/.test(host)) {
-      return reject(new Error('Invalid host identifier. Only alphanumeric characters, dashes, and underscores are allowed.'));
+  // 1. Strict validation of the host identifier to prevent injection in the bash script
+  if (!/^[a-zA-Z0-9_-]+$/.test(host)) {
+    throw new Error('Invalid host identifier. Only alphanumeric characters, dashes, and underscores are allowed.');
+  }
+
+  // 2. Guardrail Security & Approval Check
+  const guardrailsEnabled =
+    process.env.SECURITY_GUARDRAILS_ENABLED !== 'false' &&
+    SecretCache.get('SECURITY_GUARDRAILS_ENABLED') !== 'false';
+
+  if (guardrailsEnabled) {
+    // Check if this exact command has been pre-approved by the admin on Telegram
+    const isPreApproved = ApprovalManager.consumeApproval(host, command);
+
+    if (isPreApproved) {
+      if (process.env.DEBUG === 'true') {
+        console.log(`[SECURITY] Executing pre-approved command on host '${host}': ${command}`);
+      }
+    } else {
+      const check = validateCommand(command);
+
+      if (!check.allowed) {
+        if (process.env.DEBUG === 'true') {
+          console.warn(`[SECURITY] Guardrail triggered [${check.rule}]: ${check.reason}. Requesting admin approval...`);
+        }
+
+        // Request approval with 30s instant hold + 30m fallback
+        const { instantApproved, approvalId } = await ApprovalManager.requestApproval({
+          host,
+          command,
+          rule: check.rule || 'UNKNOWN_RULE',
+          reason: check.reason || 'Guarded administrative command',
+          instantHoldMs: 30000
+        });
+
+        if (instantApproved) {
+          if (process.env.DEBUG === 'true') {
+            console.log(`[SECURITY] Instant Telegram approval granted for command #${approvalId}`);
+          }
+        } else {
+          throw new Error(
+            `Command blocked by MCP Security Guardrail [${check.rule}]: ${check.reason}. ` +
+            `Execution held for administrator approval (Approval ID: #${approvalId}). ` +
+            `Once approved on Telegram, retry this command.`
+          );
+        }
+      }
     }
+  }
 
+  // 3. Dispatch to SSH Wrapper
+  return new Promise((resolve, reject) => {
     const scriptPath = path.resolve(__dirname, '../scripts/ssh-host.sh');
 
     if (process.env.DEBUG === 'true') {
@@ -66,7 +114,7 @@ export const executeOnHost = (params: ExecuteHostParams): Promise<string> => {
       }
       resolve(stdoutData.trim());
     });
-    
+
     sshProcess.on('error', (err) => {
       reject(new Error(`Failed to spawn SSH wrapper: ${err.message}`));
     });
